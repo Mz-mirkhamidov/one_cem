@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { OrderModal } from "@/components/shared/order-modal";
 import { FollowUpModal } from "@/components/shared/follow-up-modal";
 import { MessageTemplates } from "@/components/leads/message-templates";
+import { PersonDetailModal } from "@/components/shared/detail-modal";
 import { Plus, Search, Pencil, Trash2, ShoppingCart, Bell, Loader2, ChevronDown, ChevronUp, Phone, MapPin, MessageSquare, Package, Clock, MessageCircle, AlertCircle } from "lucide-react";
 import { cn, formatDate, formatPrice, getStatusColor, getProductColor } from "@/lib/utils";
 import type { Lead, LeadStatus } from "@/types";
@@ -41,6 +42,7 @@ export function LeadsTable() {
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateLead, setTemplateLead] = useState<Lead | null>(null);
+  const [detailLead, setDetailLead] = useState<Lead | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
@@ -211,7 +213,7 @@ export function LeadsTable() {
                 return (
                   <>
                     <tr key={lead.id} className="border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer"
-                      onClick={() => toggleExpand(lead.id)}>
+                      onClick={() => setDetailLead(lead)}>
 
                       {/* Avatar + Info */}
                       <td className="px-4 py-3">
@@ -374,6 +376,13 @@ export function LeadsTable() {
       {orderLead && <OrderModal open={!!orderLead} onClose={() => setOrderLead(null)} sourceId={orderLead.id} sourceName={orderLead.name} sourceType="lead" onSuccess={loadLeads} />}
       {followUpLead && <FollowUpModal open={!!followUpLead} onClose={() => setFollowUpLead(null)} sourceId={followUpLead.id} sourceName={followUpLead.name} sourcePhone={followUpLead.phone} sourceType="lead" onSuccess={() => {}} />}
       <MessageTemplates open={templatesOpen} onClose={() => { setTemplatesOpen(false); setTemplateLead(null); }} clientName={templateLead?.name} />
+      <PersonDetailModal
+        open={!!detailLead}
+        onClose={() => setDetailLead(null)}
+        person={detailLead}
+        sourceType="lead"
+        onRefresh={loadLeads}
+      />
     </div>
   );
 }

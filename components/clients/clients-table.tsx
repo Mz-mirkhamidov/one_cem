@@ -24,6 +24,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { OrderModal } from "@/components/shared/order-modal";
+import { PersonDetailModal } from "@/components/shared/detail-modal";
 import { FollowUpModal } from "@/components/shared/follow-up-modal";
 import {
   Plus,
@@ -49,6 +50,7 @@ export function ClientsTable() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [clientOrders, setClientOrders] = useState<Record<string, any[]>>({});
 
+  const [detailClient, setDetailClient] = useState<Client | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editClient, setEditClient] = useState<Client | null>(null);
   const [orderClient, setOrderClient] = useState<Client | null>(null);
@@ -128,7 +130,7 @@ export function ClientsTable() {
             <tbody>
               {filtered.map((client) => (
                 <>
-                  <tr key={client.id} className="border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer" onClick={() => toggleExpand(client.id)}>
+                  <tr key={client.id} className="border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer" onClick={() => setDetailClient(client)}>
                     <td className="px-4 py-3 font-medium">{client.name}</td>
                     <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{client.phone}</td>
                     <td className="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell">{client.address}</td>
@@ -209,6 +211,13 @@ export function ClientsTable() {
       {editClient && <ClientFormModal open={!!editClient} onClose={() => setEditClient(null)} onSuccess={loadClients} client={editClient} />}
       {orderClient && <OrderModal open={!!orderClient} onClose={() => setOrderClient(null)} sourceId={orderClient.id} sourceName={orderClient.name} sourceType="client" onSuccess={loadClients} />}
       {followUpClient && <FollowUpModal open={!!followUpClient} onClose={() => setFollowUpClient(null)} sourceId={followUpClient.id} sourceName={followUpClient.name} sourcePhone={followUpClient.phone} sourceType="client" onSuccess={() => {}} />}
+      <PersonDetailModal
+        open={!!detailClient}
+        onClose={() => setDetailClient(null)}
+        person={detailClient}
+        sourceType="client"
+        onRefresh={loadClients}
+      />
     </div>
   );
 }
