@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -31,13 +31,15 @@ export function FollowUpsTable() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
 
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   useEffect(() => { loadFollowUps(); }, []);
 
   async function loadFollowUps() {
     try {
-      const user = { id: OWNER_ID };
+      const user = { id: operatorId };
     const { data } = await supabase
         .from("follow_ups").select("*").eq("user_id", user.id).order("scheduled_at", { ascending: true });
       setFollowUps((data as FollowUp[]) || []);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +49,8 @@ export function LeadsTable() {
   const [orderLead, setOrderLead] = useState<Lead | null>(null);
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
 
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   useEffect(() => { loadLeads(); }, []);
@@ -75,11 +77,11 @@ export function LeadsTable() {
 
   async function loadLeads() {
     try {
-      const { data } = await supabase.from("leads").select("*").eq("user_id", OWNER_ID).order("created_at", { ascending: false });
+      const { data } = await supabase.from("leads").select("*").eq("user_id", operatorId).order("created_at", { ascending: false });
       const list = (data as Lead[]) || [];
       setLeads(list);
       if (list.length > 0) {
-        const { data: orders } = await supabase.from("orders").select("source_id").eq("user_id", OWNER_ID).eq("source_type", "lead");
+        const { data: orders } = await supabase.from("orders").select("source_id").eq("user_id", operatorId).eq("source_type", "lead");
         const counts: Record<string, number> = {};
         orders?.forEach((o) => { counts[o.source_id] = (counts[o.source_id] || 0) + 1; });
         setOrderCounts(counts);
@@ -371,8 +373,8 @@ export function LeadsTable() {
       )}
 
       {/* Modals */}
-      <LeadFormModal open={addOpen} onClose={() => setAddOpen(false)} onSuccess={loadLeads} tags={tags} onAddTag={(t) => setTags((p) => p.includes(t) ? p : [...p, t])} />
-      {editLead && <LeadFormModal open={!!editLead} onClose={() => setEditLead(null)} onSuccess={loadLeads} tags={tags} onAddTag={(t) => setTags((p) => p.includes(t) ? p : [...p, t])} lead={editLead} />}
+      <LeadFormModal open={addOpen} onClose={() => setAddOpen(false)} onSuccess={loadLeads} tags={tags} onAddTag={(t) => setTags((p) => p.includes(t) ? p : [...p, t])} operatorId={operatorId} />
+      {editLead && <LeadFormModal open={!!editLead} onClose={() => setEditLead(null)} onSuccess={loadLeads} tags={tags} onAddTag={(t) => setTags((p) => p.includes(t) ? p : [...p, t])} lead={editLead} operatorId={operatorId} />}
       {orderLead && <OrderModal open={!!orderLead} onClose={() => setOrderLead(null)} sourceId={orderLead.id} sourceName={orderLead.name} sourceType="lead" onSuccess={loadLeads} />}
       {followUpLead && <FollowUpModal open={!!followUpLead} onClose={() => setFollowUpLead(null)} sourceId={followUpLead.id} sourceName={followUpLead.name} sourcePhone={followUpLead.phone} sourceType="lead" onSuccess={() => {}} />}
       <MessageTemplates open={templatesOpen} onClose={() => { setTemplatesOpen(false); setTemplateLead(null); }} clientName={templateLead?.name} />
@@ -390,10 +392,10 @@ export function LeadsTable() {
 // ---- Lead Form Modal ----
 interface LeadFormModalProps {
   open: boolean; onClose: () => void; onSuccess: () => void;
-  tags: string[]; onAddTag: (tag: string) => void; lead?: Lead;
+  tags: string[]; onAddTag: (tag: string) => void; lead?: Lead; operatorId: string;
 }
 
-function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead }: LeadFormModalProps) {
+function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead, operatorId }: LeadFormModalProps) {
   const [name, setName] = useState(lead?.name || "");
   const [phone, setPhone] = useState(lead?.phone || "");
   const [address, setAddress] = useState(lead?.address || "");
@@ -408,9 +410,9 @@ function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead }: LeadF
   // Dublikat tekshiruv
   async function checkDuplicate(p: string) {
     if (p.length < 9) { setDuplicate(null); return; }
-    const { data: l } = await supabase.from("leads").select("name").eq("phone", p).eq("user_id", OWNER_ID).neq("id", lead?.id || "00000000-0000-0000-0000-000000000000").limit(1);
+    const { data: l } = await supabase.from("leads").select("name").eq("phone", p).eq("user_id", operatorId).neq("id", lead?.id || "00000000-0000-0000-0000-000000000000").limit(1);
     if (l && l.length > 0) { setDuplicate({ name: l[0].name, type: "lid" }); return; }
-    const { data: c } = await supabase.from("clients").select("name").eq("phone", p).eq("user_id", OWNER_ID).limit(1);
+    const { data: c } = await supabase.from("clients").select("name").eq("phone", p).eq("user_id", operatorId).limit(1);
     if (c && c.length > 0) { setDuplicate({ name: c[0].name, type: "mijoz" }); return; }
     setDuplicate(null);
   }
@@ -419,7 +421,7 @@ function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead }: LeadF
     e.preventDefault();
     setLoading(true);
     const payload = {
-      user_id: OWNER_ID, name, phone,
+      user_id: operatorId, name, phone,
       address: address || null,
       tag: tag === "none" ? null : tag || null,
       status, comment: comment || null,

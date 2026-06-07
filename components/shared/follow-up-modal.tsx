@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import type { SourceType } from "@/types";
 import { Loader2 } from "lucide-react";
 
@@ -37,6 +37,8 @@ export function FollowUpModal({
   const [scheduledAt, setScheduledAt] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,7 +46,7 @@ export function FollowUpModal({
     if (!scheduledAt) return;
     setLoading(true);
 
-    const user = { id: OWNER_ID };
+    const user = { id: operatorId };
 
     await supabase.from("follow_ups").insert({
       user_id: user.id,

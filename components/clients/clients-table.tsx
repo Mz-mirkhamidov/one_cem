@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +56,8 @@ export function ClientsTable() {
   const [orderClient, setOrderClient] = useState<Client | null>(null);
   const [followUpClient, setFollowUpClient] = useState<Client | null>(null);
 
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   useEffect(() => { loadClients(); }, []);
@@ -70,7 +72,7 @@ export function ClientsTable() {
 
   async function loadClients() {
     try {
-      const user = { id: OWNER_ID };
+      const user = { id: operatorId };
     const { data } = await supabase
         .from("clients").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
       setClients((data as Client[]) || []);
@@ -207,8 +209,8 @@ export function ClientsTable() {
         </div>
       )}
 
-      <ClientFormModal open={addOpen} onClose={() => setAddOpen(false)} onSuccess={loadClients} />
-      {editClient && <ClientFormModal open={!!editClient} onClose={() => setEditClient(null)} onSuccess={loadClients} client={editClient} />}
+      <ClientFormModal open={addOpen} onClose={() => setAddOpen(false)} onSuccess={loadClients} operatorId={operatorId} />
+      {editClient && <ClientFormModal open={!!editClient} onClose={() => setEditClient(null)} onSuccess={loadClients} client={editClient} operatorId={operatorId} />}
       {orderClient && <OrderModal open={!!orderClient} onClose={() => setOrderClient(null)} sourceId={orderClient.id} sourceName={orderClient.name} sourceType="client" onSuccess={loadClients} />}
       {followUpClient && <FollowUpModal open={!!followUpClient} onClose={() => setFollowUpClient(null)} sourceId={followUpClient.id} sourceName={followUpClient.name} sourcePhone={followUpClient.phone} sourceType="client" onSuccess={() => {}} />}
       <PersonDetailModal
@@ -222,7 +224,7 @@ export function ClientsTable() {
   );
 }
 
-function ClientFormModal({ open, onClose, onSuccess, client }: { open: boolean; onClose: () => void; onSuccess: () => void; client?: Client }) {
+function ClientFormModal({ open, onClose, onSuccess, client, operatorId }: { open: boolean; onClose: () => void; onSuccess: () => void; client?: Client; operatorId: string }) {
   const [name, setName] = useState(client?.name || "");
   const [phone, setPhone] = useState(client?.phone || "");
   const [address, setAddress] = useState(client?.address || "");
@@ -233,8 +235,8 @@ function ClientFormModal({ open, onClose, onSuccess, client }: { open: boolean; 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const user = { id: OWNER_ID };
-    const payload = { user_id: user.id, name, phone, address: address || null, comment: comment || null };
+    const user = { id: operatorId };
+    const payload = { user_id: operatorId, operator_id: operatorId, name, phone, address: address || null, comment: comment || null };
     if (client) { await supabase.from("clients").update(payload).eq("id", client.id); }
     else { await supabase.from("clients").insert(payload); }
     setLoading(false);

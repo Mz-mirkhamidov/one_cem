@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { LeadsChart } from "@/components/dashboard/leads-chart";
 import { TodayFollowUps, TodayOrders } from "@/components/dashboard/today-list";
@@ -18,20 +18,22 @@ export default function DashboardPage() {
   const [todayFollowUps, setTodayFollowUps] = useState<FollowUp[]>([]);
   const [todayOrders, setTodayOrders] = useState<Order[]>([]);
   const [chartData, setChartData] = useState<{ date: string; count: number }[]>([]);
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
-  useEffect(() => { loadDashboard(); }, []);
+  useEffect(() => { if (operatorId) loadDashboard(); }, [operatorId]);
 
   async function loadDashboard() {
     try {
       const todayStart = startOfDay(new Date()).toISOString();
       const todayEnd = endOfDay(new Date()).toISOString();
       const [leadsRes, ordersRes, fuRes, todayOrdRes, chartRes] = await Promise.all([
-        supabase.from("leads").select("*", { count: "exact", head: true }).eq("user_id", OWNER_ID).gte("created_at", todayStart).lte("created_at", todayEnd),
-        supabase.from("orders").select("price").eq("user_id", OWNER_ID),
-        supabase.from("follow_ups").select("*").eq("user_id", OWNER_ID).eq("status", "Kutilmoqda").gte("scheduled_at", todayStart).lte("scheduled_at", todayEnd).order("scheduled_at"),
-        supabase.from("orders").select("*").eq("user_id", OWNER_ID).eq("order_type", "Keyinroqi").gte("scheduled_at", todayStart).lte("scheduled_at", todayEnd).order("scheduled_at"),
-        supabase.from("leads").select("created_at").eq("user_id", OWNER_ID).gte("created_at", new Date(Date.now() - 6 * 86400000).toISOString()),
+        supabase.from("leads").select("*", { count: "exact", head: true }).eq("user_id", operatorId).gte("created_at", todayStart).lte("created_at", todayEnd),
+        supabase.from("orders").select("price").eq("user_id", operatorId),
+        supabase.from("follow_ups").select("*").eq("user_id", operatorId).eq("status", "Kutilmoqda").gte("scheduled_at", todayStart).lte("scheduled_at", todayEnd).order("scheduled_at"),
+        supabase.from("orders").select("*").eq("user_id", operatorId).eq("order_type", "Keyinroqi").gte("scheduled_at", todayStart).lte("scheduled_at", todayEnd).order("scheduled_at"),
+        supabase.from("leads").select("created_at").eq("user_id", operatorId).gte("created_at", new Date(Date.now() - 6 * 86400000).toISOString()),
       ]);
       setTodayLeads(leadsRes.count || 0);
       setTotalOrders(ordersRes.data?.length || 0);

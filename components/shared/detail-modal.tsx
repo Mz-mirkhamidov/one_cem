@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { OrderModal } from "@/components/shared/order-modal";
@@ -30,6 +30,8 @@ export function PersonDetailModal({ open, onClose, person, sourceType, onRefresh
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   useEffect(() => {
@@ -40,8 +42,8 @@ export function PersonDetailModal({ open, onClose, person, sourceType, onRefresh
     if (!person) return;
     setLoading(true);
     const [ordersRes, fuRes] = await Promise.all([
-      supabase.from("orders").select("*").eq("source_id", person.id).eq("user_id", OWNER_ID).order("created_at", { ascending: false }),
-      supabase.from("follow_ups").select("*").eq("source_id", person.id).eq("user_id", OWNER_ID).order("scheduled_at", { ascending: false }),
+      supabase.from("orders").select("*").eq("source_id", person.id).eq("user_id", operatorId).order("created_at", { ascending: false }),
+      supabase.from("follow_ups").select("*").eq("source_id", person.id).eq("user_id", operatorId).order("scheduled_at", { ascending: false }),
     ]);
     setOrders(ordersRes.data || []);
     setFollowUps(fuRes.data || []);

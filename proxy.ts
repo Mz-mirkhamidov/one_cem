@@ -1,18 +1,41 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-const SESSION_COOKIE = "crm_session";
+import { SESSION_COOKIE, decodeSession } from "@/lib/session";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const session = request.cookies.get(SESSION_COOKIE);
-  const isAuth = session?.value === "authenticated";
+  const cookieVal = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = cookieVal ? decodeSession(cookieVal) : null;
 
-  if (isAuth && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // Static & assets
+  if (pathname.startsWith("/_next") || pathname.includes(".")) {
+    return NextResponse.next();
   }
-  if (!isAuth && !pathname.startsWith("/login")) {
+
+  // Not logged in → login
+  if (!session) {
+    if (pathname === "/login") return NextResponse.next();
     return NextResponse.redirect(new URL("/login", request.url));
   }
+
+  // Logged in → don't show login
+  if (pathname === "/login") {
+    return NextResponse.redirect(
+      new URL(session.role === "admin" ? "/admin" : "/dashboard", request.url)
+    );
+  }
+
+  // Operator tries admin → block
+  if (session.role === "operator" && pathname.startsWith("/admin")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Root → redirect
+  if (pathname === "/") {
+    return NextResponse.redirect(
+      new URL(session.role === "admin" ? "/admin" : "/dashboard", request.url)
+    );
+  }
+
   return NextResponse.next();
 }
 

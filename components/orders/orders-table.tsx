@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,8 @@ export function OrdersTable() {
   const [detailPerson, setDetailPerson] = useState<Lead | Client | null>(null);
   const [detailType, setDetailType] = useState<"lead" | "client">("lead");
 
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   useEffect(() => { loadOrders(); }, []);
@@ -35,7 +37,7 @@ export function OrdersTable() {
 
   async function loadOrders() {
     try {
-      const { data } = await supabase.from("orders").select("*").eq("user_id", OWNER_ID).order("created_at", { ascending: false });
+      const { data } = await supabase.from("orders").select("*").eq("user_id", operatorId).order("created_at", { ascending: false });
       setOrders((data as Order[]) || []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }

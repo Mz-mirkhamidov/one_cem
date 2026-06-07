@@ -2,29 +2,43 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Zap, Loader2, AlertCircle } from "lucide-react";
+import { SESSION_COOKIE, hashPassword, encodeSession } from "@/lib/session";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const supabase = createClient();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 400));
-    if (email === "mz@crm.uz" && password === "mz1313") {
-      document.cookie = `crm_session=authenticated; path=/; max-age=2592000; SameSite=Lax`;
-      router.push("/dashboard");
+    try {
+      const hash = await hashPassword(password);
+      const { data, error: rpcError } = await supabase.rpc("check_login", {
+        p_phone: phone.trim(),
+        p_password_hash: hash,
+      });
+      if (rpcError || !data?.success) {
+        setError("Noto'g'ri raqam yoki parol");
+        setLoading(false);
+        return;
+      }
+      const session = { id: data.id, name: data.name, phone: data.phone, role: data.role };
+      const encoded = encodeSession(session);
+      document.cookie = `${SESSION_COOKIE}=${encoded}; path=/; max-age=2592000; SameSite=Lax`;
+      router.push(data.role === "admin" ? "/admin" : "/dashboard");
       router.refresh();
-    } else {
-      setError("Email yoki parol noto'g'ri");
+    } catch (err) {
+      setError("Xatolik yuz berdi. Qaytadan urinib ko'ring.");
       setLoading(false);
     }
   }
@@ -45,25 +59,26 @@ export default function LoginPage() {
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="mz@crm.uz" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+              <Label htmlFor="phone">Telefon raqam</Label>
+              <Input id="phone" type="text" placeholder="+998901234567" value={phone}
+                onChange={(e) => setPhone(e.target.value)} required autoFocus />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Parol</Label>
-              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Input id="password" type="password" placeholder="••••••••" value={password}
+                onChange={(e) => setPassword(e.target.value)} required />
             </div>
             {error && (
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
               </div>
             )}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Kirish...</> : "Kirish"}
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Kirish...</> : "Kirish"}
             </Button>
           </form>
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-6">Sellora Plus CRM v1.0</p>
+        <p className="text-center text-xs text-muted-foreground mt-6">Sellora Plus CRM v2.0</p>
       </div>
     </div>
   );

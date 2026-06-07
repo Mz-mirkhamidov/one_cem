@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { OWNER_ID } from "@/lib/auth";
+import { useOperator } from "@/lib/useOperator";
 import { PRODUCTS, type SourceType, type ProductType, type OrderType } from "@/types";
 import { Loader2 } from "lucide-react";
 
@@ -45,6 +45,8 @@ export function OrderModal({
   const [scheduledAt, setScheduledAt] = useState("");
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
+  const operator = useOperator();
+  const operatorId = operator?.id || "";
   const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -52,7 +54,7 @@ export function OrderModal({
     if (!price) return;
     setLoading(true);
 
-    const user = { id: OWNER_ID };
+    const user = { id: operatorId };
 
     const payload: any = {
       user_id: user.id,
