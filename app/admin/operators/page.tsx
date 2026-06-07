@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { hashPassword } from "@/lib/session";
-import { Plus, Loader2, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { hashPassword } from "@/lib/session";
+import { Plus, Loader2, ShieldOff, ShieldCheck, Trash2, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 interface Operator {
-  id: string; phone: string; name: string; role: string; is_active: boolean; created_at: string;
+  id: string; phone: string; name: string; role: string;
+  is_active: boolean; status: string; created_at: string;
 }
 
 export default function OperatorsPage() {
@@ -28,9 +29,34 @@ export default function OperatorsPage() {
   useEffect(() => { loadOperators(); }, []);
 
   async function loadOperators() {
-    const { data } = await supabase.from("operators").select("*").order("created_at");
+    const { data } = await supabase.from("operators").select("*").order("is_active").order("created_at");
     setOperators((data as Operator[]) || []);
     setLoading(false);
+  }
+
+  async function approveOperator(id: string) {
+    await supabase.from("operators").update({ is_active: true, status: "active" }).eq("id", id);
+    setOperators((prev) => prev.map((o) => o.id === id ? { ...o, is_active: true, status: "active" } : o));
+  }
+
+  async function rejectOperator(id: string) {
+    await supabase.from("operators").delete().eq("id", id);
+    setOperators((prev) => prev.filter((o) => o.id !== id));
+  }
+
+  async function blockOperator(id: string) {
+    await supabase.from("operators").update({ is_active: false, status: "blocked" }).eq("id", id);
+    setOperators((prev) => prev.map((o) => o.id === id ? { ...o, is_active: false, status: "blocked" } : o));
+  }
+
+  async function unblockOperator(id: string) {
+    await supabase.from("operators").update({ is_active: true, status: "active" }).eq("id", id);
+    setOperators((prev) => prev.map((o) => o.id === id ? { ...o, is_active: true, status: "active" } : o));
+  }
+
+  async function deleteOperator(id: string) {
+    await supabase.from("operators").delete().eq("id", id);
+    setOperators((prev) => prev.filter((o) => o.id !== id));
   }
 
   async function addOperator(e: React.FormEvent) {
@@ -38,7 +64,9 @@ export default function OperatorsPage() {
     setSaving(true); setError("");
     const hash = await hashPassword(form.password);
     const { error: err } = await supabase.from("operators").insert({
-      phone: form.phone.trim(), name: form.name.trim(), password: hash, role: form.role, is_active: true,
+      phone: form.phone.trim(), name: form.name.trim(),
+      password: hash, role: form.role,
+      is_active: true, status: "active",
     });
     if (err) { setError(err.message); setSaving(false); return; }
     setSaving(false);
@@ -47,15 +75,9 @@ export default function OperatorsPage() {
     loadOperators();
   }
 
-  async function toggleActive(id: string, current: boolean) {
-    await supabase.from("operators").update({ is_active: !current }).eq("id", id);
-    setOperators((prev) => prev.map((o) => o.id === id ? { ...o, is_active: !current } : o));
-  }
-
-  async function deleteOperator(id: string) {
-    await supabase.from("operators").delete().eq("id", id);
-    setOperators((prev) => prev.filter((o) => o.id !== id));
-  }
+  const pending = operators.filter((o) => !o.is_active && o.status !== "blocked");
+  const active = operators.filter((o) => o.is_active);
+  const blocked = operators.filter((o) => !o.is_active && o.status === "blocked");
 
   return (
     <div className="space-y-6">
@@ -69,77 +91,142 @@ export default function OperatorsPage() {
         </Button>
       </div>
 
-      {loading ? (
-        <p className="text-muted-foreground text-sm">Yuklanmoqda...</p>
-      ) : (
-        <div className="rounded-xl border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            {/* Pending approvals alert */}
-            {operators.filter(o => o.is_active === false || (o as any).status === 'pending').length > 0 && (
-              <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-sm text-orange-400">
-                ⏳ Tasdiqlash kutayotganlar bor — jadvalda ko'ring
+      {loading ? <p className="text-muted-foreground text-sm">Yuklanmoqda...</p> : (
+        <div className="space-y-6">
+
+          {/* PENDING */}
+          {pending.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-semibold text-foreground">Tasdiqlash kutilmoqda</h2>
+                <span className="bg-orange-500/20 text-orange-400 text-xs rounded-full px-2 py-0.5 border border-orange-500/30 animate-pulse">
+                  {pending.length} ta
+                </span>
               </div>
-            )}
-            <thead>
-              <tr className="border-b border-border bg-secondary/50">
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Ism</th>
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Telefon</th>
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Rol</th>
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Qo'shilgan</th>
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Holat</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {operators.map((op) => (
-                <tr key={op.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{op.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{op.phone}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${op.role === "admin" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30"}`}>
-                      {op.role === "admin" ? "Admin" : "Operator"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{formatDate(op.created_at)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${op.is_active ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}>
-                      {op.is_active ? "Faol" : "Bloklangan"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Button size="icon" variant="ghost" className="h-8 w-8"
-                        title={op.is_active ? "Bloklash" : "Faollashtirish"}
-                        onClick={() => toggleActive(op.id, op.is_active)}>
-                        {op.is_active ? <ShieldOff className="w-3.5 h-3.5 text-orange-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:bg-red-500/10">
-                            <Trash2 className="w-3.5 h-3.5" />
+              <div className="rounded-xl border border-orange-500/20 overflow-hidden bg-orange-500/5">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-orange-500/10 bg-orange-500/10">
+                      <th className="text-left px-4 py-3 text-orange-300 font-medium">Ism</th>
+                      <th className="text-left px-4 py-3 text-orange-300 font-medium">Telefon</th>
+                      <th className="text-left px-4 py-3 text-orange-300 font-medium">Sana</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pending.map((op) => (
+                      <tr key={op.id} className="border-b border-orange-500/10">
+                        <td className="px-4 py-3 font-medium text-foreground">{op.name}</td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{op.phone}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">{formatDate(op.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button size="sm" className="h-8 text-xs gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white"
+                              onClick={() => approveOperator(op.id)}>
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Tasdiqlash
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              onClick={() => rejectOperator(op.id)}>
+                              <XCircle className="w-3.5 h-3.5" /> Rad etish
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ACTIVE */}
+          {active.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3">Faol operatorlar ({active.length})</h2>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/50">
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium">Ism</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium">Telefon</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium">Rol</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium">Qo'shilgan</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {active.map((op) => (
+                      <tr key={op.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                        <td className="px-4 py-3 font-medium">{op.name}</td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{op.phone}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${op.role === "admin" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30"}`}>
+                            {op.role === "admin" ? "Admin" : "Operator"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">{formatDate(op.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-orange-400 hover:bg-orange-500/10"
+                              title="Bloklash" onClick={() => blockOperator(op.id)}>
+                              <ShieldOff className="w-3.5 h-3.5" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:bg-red-500/10">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>O'chirish</AlertDialogTitle>
+                                  <AlertDialogDescription>{op.name} ni o'chirmoqchimisiz?</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Bekor</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteOperator(op.id)}>O'chirish</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* BLOCKED */}
+          {blocked.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground mb-3">Bloklangan ({blocked.length})</h2>
+              <div className="rounded-xl border border-border overflow-hidden opacity-60">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {blocked.map((op) => (
+                      <tr key={op.id} className="border-b border-border">
+                        <td className="px-4 py-3 font-medium">{op.name}</td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{op.phone}</td>
+                        <td className="px-4 py-3">
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-emerald-400 hover:bg-emerald-500/10"
+                            onClick={() => unblockOperator(op.id)}>
+                            <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Faollashtirish
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Operatorni o'chirish</AlertDialogTitle>
-                            <AlertDialogDescription>{op.name} ni o'chirmoqchimisiz? Barcha ma'lumotlari saqlanadi.</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Bekor</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteOperator(op.id)}>O'chirish</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Add operator modal */}
+      {/* Add modal */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Yangi operator qo'shish</DialogTitle></DialogHeader>
@@ -151,7 +238,7 @@ export default function OperatorsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Telefon *</Label>
-                <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+998901234567" required />
+                <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+998..." required />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
