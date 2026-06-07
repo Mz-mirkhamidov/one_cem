@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { OrdersTable } from "@/components/orders/orders-table";
 
 export default function OrdersPage() {

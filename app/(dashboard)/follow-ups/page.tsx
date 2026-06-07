@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { FollowUpsTable } from "@/components/follow-ups/follow-ups-table";
 
 export default function FollowUpsPage() {

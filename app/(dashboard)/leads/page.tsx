@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { LeadsTable } from "@/components/leads/leads-table";
 
 export default function LeadsPage() {
