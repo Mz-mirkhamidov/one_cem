@@ -11,10 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { OrderModal } from "@/components/shared/order-modal";
 import { FollowUpModal } from "@/components/shared/follow-up-modal";
-import { MessageTemplates } from "@/components/leads/message-templates";
 import { PersonDetailModal } from "@/components/shared/detail-modal";
-import { Plus, Search, Pencil, Trash2, ShoppingCart, Bell, Loader2, ChevronDown, ChevronUp, Phone, MapPin, MessageSquare, Package, Clock, MessageCircle, AlertCircle } from "lucide-react";
-import { cn, formatDate, formatPrice, getStatusColor, getProductColor } from "@/lib/utils";
+import { Plus, Search, Pencil, Trash2, ShoppingCart, Bell, Loader2, ChevronDown, ChevronUp, Phone, MapPin, MessageSquare, Package, Clock, AlertCircle } from "lucide-react";
+import { cn, formatDate, formatPrice, getStatusColor, getProductColor, formatPhoneForCall } from "@/lib/utils";
 import type { Lead, LeadStatus } from "@/types";
 import { LEAD_STATUSES, DEFAULT_TAGS } from "@/types";
 
@@ -40,8 +39,6 @@ export function LeadsTable() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [leadOrders, setLeadOrders] = useState<Record<string, any[]>>({});
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
-  const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [templateLead, setTemplateLead] = useState<Lead | null>(null);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -179,11 +176,6 @@ export function LeadsTable() {
           </SelectContent>
         </Select>
 
-        {/* Shablonlar tugmasi */}
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setTemplateLead(null); setTemplatesOpen(true); }}>
-          <MessageCircle className="w-4 h-4" />
-          Shablonlar
-        </Button>
 
         <Button onClick={() => setAddOpen(true)} size="sm">
           <Plus className="w-4 h-4" /> Yangi lid
@@ -225,7 +217,7 @@ export function LeadsTable() {
                           </div>
                           <div>
                             <p className="font-semibold text-foreground leading-tight">{lead.name}</p>
-                            <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()}
+                            <a href={`tel:${formatPhoneForCall(lead.phone)}`} onClick={(e) => e.stopPropagation()}
                               className="text-xs text-muted-foreground hover:text-primary font-mono flex items-center gap-1 mt-0.5">
                               <Phone className="w-3 h-3" />{lead.phone}
                             </a>
@@ -269,10 +261,6 @@ export function LeadsTable() {
                             onClick={() => setFollowUpLead(lead)}>
                             <Bell className="w-3.5 h-3.5" />
                             <span className="hidden xl:inline">Eslatma</span>
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8"
-                            onClick={() => { setTemplateLead(lead); setTemplatesOpen(true); }}>
-                            <MessageCircle className="w-3.5 h-3.5 text-violet-400" />
                           </Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditLead(lead)}>
                             <Pencil className="w-3.5 h-3.5" />
@@ -332,11 +320,7 @@ export function LeadsTable() {
                                   onClick={() => { setExpandedId(null); setFollowUpLead(lead); }}>
                                   <Bell className="w-3.5 h-3.5" /> Eslatma belgilash
                                 </Button>
-                                <Button size="sm" variant="outline" className="justify-start gap-2 text-xs border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
-                                  onClick={() => { setTemplateLead(lead); setTemplatesOpen(true); }}>
-                                  <MessageCircle className="w-3.5 h-3.5" /> Xabar shablonlari
-                                </Button>
-                                <a href={`tel:${lead.phone}`}>
+                                <a href={`tel:${formatPhoneForCall(lead.phone)}`}>
                                   <Button size="sm" variant="outline" className="justify-start gap-2 text-xs w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
                                     <Phone className="w-3.5 h-3.5" /> Qo'ng'iroq qilish
                                   </Button>
@@ -377,7 +361,6 @@ export function LeadsTable() {
       {editLead && <LeadFormModal open={!!editLead} onClose={() => setEditLead(null)} onSuccess={loadLeads} tags={tags} onAddTag={(t) => setTags((p) => p.includes(t) ? p : [...p, t])} lead={editLead} operatorId={operatorId} />}
       {orderLead && <OrderModal open={!!orderLead} onClose={() => setOrderLead(null)} sourceId={orderLead.id} sourceName={orderLead.name} sourceType="lead" onSuccess={loadLeads} />}
       {followUpLead && <FollowUpModal open={!!followUpLead} onClose={() => setFollowUpLead(null)} sourceId={followUpLead.id} sourceName={followUpLead.name} sourcePhone={followUpLead.phone} sourceType="lead" onSuccess={() => {}} />}
-      <MessageTemplates open={templatesOpen} onClose={() => { setTemplatesOpen(false); setTemplateLead(null); }} clientName={templateLead?.name} />
       <PersonDetailModal
         open={!!detailLead}
         onClose={() => setDetailLead(null)}

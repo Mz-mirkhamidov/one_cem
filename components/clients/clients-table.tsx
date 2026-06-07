@@ -39,7 +39,7 @@ import {
   MapPin,
   MessageSquare,
 } from "lucide-react";
-import { cn, formatDate, formatPrice, getProductColor } from "@/lib/utils";
+import { cn, formatDate, formatPrice, getProductColor, formatPhoneForCall } from "@/lib/utils";
 import type { Client } from "@/types";
 
 export function ClientsTable() {

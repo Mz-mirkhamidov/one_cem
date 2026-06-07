@@ -7,12 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { OrderModal } from "@/components/shared/order-modal";
 import { FollowUpModal } from "@/components/shared/follow-up-modal";
-import { MessageTemplates } from "@/components/leads/message-templates";
 import {
-  Phone, MapPin, MessageSquare, ShoppingCart, Bell, MessageCircle,
+  Phone, MapPin, MessageSquare, ShoppingCart, Bell,
   Clock, CheckCircle2, Package, Loader2, Calendar,
 } from "lucide-react";
-import { cn, formatDate, formatPrice, getStatusColor, getProductColor } from "@/lib/utils";
+import { cn, formatDate, formatPrice, getStatusColor, getProductColor, formatPhoneForCall } from "@/lib/utils";
 import type { Lead, Client, SourceType } from "@/types";
 
 interface PersonDetailModalProps {
@@ -29,7 +28,6 @@ export function PersonDetailModal({ open, onClose, person, sourceType, onRefresh
   const [loading, setLoading] = useState(false);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
   const operator = useOperator();
   const operatorId = operator?.id || "";
   const supabase = createClient();
@@ -70,7 +68,7 @@ export function PersonDetailModal({ open, onClose, person, sourceType, onRefresh
               </div>
               <div className="flex-1 min-w-0">
                 <DialogTitle className="text-xl">{person.name}</DialogTitle>
-                <a href={`tel:${person.phone}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary mt-1 w-fit">
+                <a href={`tel:${formatPhoneForCall(person.phone)}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary mt-1 w-fit">
                   <Phone className="w-3.5 h-3.5" />
                   {person.phone}
                 </a>
@@ -216,11 +214,7 @@ export function PersonDetailModal({ open, onClose, person, sourceType, onRefresh
 
             {/* Action buttons */}
             <div className="flex gap-2 pt-2 border-t border-border">
-              <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs"
-                onClick={() => setTemplatesOpen(true)}>
-                <MessageCircle className="w-3.5 h-3.5 text-violet-400" /> Shablonlar
-              </Button>
-              <a href={`tel:${person.phone}`} className="flex-1">
+              <a href={`tel:${formatPhoneForCall(person.phone)}`} className="flex-1">
                 <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs">
                   <Phone className="w-3.5 h-3.5 text-emerald-400" /> Qo'ng'iroq
                 </Button>
@@ -242,7 +236,6 @@ export function PersonDetailModal({ open, onClose, person, sourceType, onRefresh
           sourceType={sourceType} onSuccess={loadDetails}
         />
       )}
-      <MessageTemplates open={templatesOpen} onClose={() => setTemplatesOpen(false)} clientName={person.name} />
     </>
   );
 }

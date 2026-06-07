@@ -64,3 +64,9 @@ export function getProductColor(product: string): string {
       return "bg-secondary text-muted-foreground";
   }
 }
+
+// 9 xonalik format (MicroSIP uchun: +998901234567 → 901234567)
+export function formatPhoneForCall(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length > 9 ? digits.slice(-9) : digits;
+}
