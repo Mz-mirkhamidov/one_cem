@@ -1,59 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { OWNER_ID } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { OrderModal } from "@/components/shared/order-modal";
 import { FollowUpModal } from "@/components/shared/follow-up-modal";
-import {
-  Plus, Search, Pencil, Trash2, ShoppingCart, Bell, Loader2,
-  ChevronDown, ChevronUp, Phone, MapPin, MessageSquare, Package,
-} from "lucide-react";
+import { MessageTemplates } from "@/components/leads/message-templates";
+import { Plus, Search, Pencil, Trash2, ShoppingCart, Bell, Loader2, ChevronDown, ChevronUp, Phone, MapPin, MessageSquare, Package, Clock, MessageCircle, AlertCircle } from "lucide-react";
 import { cn, formatDate, formatPrice, getStatusColor, getProductColor } from "@/lib/utils";
 import type { Lead, LeadStatus } from "@/types";
 import { LEAD_STATUSES, DEFAULT_TAGS } from "@/types";
 
-// Status statistika kartochkasi
-function StatusBar({ leads }: { leads: Lead[] }) {
-  const counts = LEAD_STATUSES.reduce((acc, s) => {
-    acc[s] = leads.filter((l) => l.status === s).length;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const colors: Record<string, string> = {
-    "Yangi": "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    "Ko'rib chiqilmoqda": "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    "Kelishildi": "bg-green-500/20 text-green-400 border-green-500/30",
-    "Rad etildi": "bg-red-500/20 text-red-400 border-red-500/30",
-    "Buyurtma berilgan": "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  };
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {LEAD_STATUSES.map((s) => (
-        <div key={s} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium", colors[s])}>
-          <span>{s}</span>
-          <span className="font-bold text-sm">{counts[s]}</span>
-        </div>
-      ))}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-secondary text-xs font-medium text-muted-foreground ml-auto">
-        Jami: <span className="font-bold text-foreground">{leads.length}</span>
-      </div>
-    </div>
-  );
+// Lid yoshi hisoblash
+function getLeadAge(createdAt: string) {
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  if (days === 0) return { days, label: "Bugun", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" };
+  if (days === 1) return { days, label: "Kecha", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" };
+  if (days <= 4) return { days, label: `${days}k`, color: "text-blue-400 bg-blue-500/10 border-blue-500/30" };
+  if (days <= 9) return { days, label: `${days}k`, color: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30" };
+  return { days, label: `${days}k`, color: "text-red-400 bg-red-500/10 border-red-500/30" };
 }
 
 export function LeadsTable() {
@@ -63,10 +34,13 @@ export function LeadsTable() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTag, setFilterTag] = useState("all");
+  const [filterAge, setFilterAge] = useState("all"); // sovib qolgan filter
   const [tags, setTags] = useState<string[]>(DEFAULT_TAGS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [leadOrders, setLeadOrders] = useState<Record<string, any[]>>({});
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateLead, setTemplateLead] = useState<Lead | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
@@ -85,27 +59,31 @@ export function LeadsTable() {
     }
     if (filterStatus !== "all") f = f.filter((l) => l.status === filterStatus);
     if (filterTag !== "all") f = f.filter((l) => l.tag === filterTag);
+    // Sovib qolgan filter
+    if (filterAge !== "all") {
+      const days = parseInt(filterAge);
+      f = f.filter((l) => {
+        const age = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000);
+        const notClosed = l.status !== "Buyurtma berilgan" && l.status !== "Rad etildi";
+        return age >= days && notClosed;
+      });
+    }
     setFiltered(f);
-  }, [search, filterStatus, filterTag, leads]);
+  }, [search, filterStatus, filterTag, filterAge, leads]);
 
   async function loadLeads() {
     try {
       const { data } = await supabase.from("leads").select("*").eq("user_id", OWNER_ID).order("created_at", { ascending: false });
-      const leads = (data as Lead[]) || [];
-      setLeads(leads);
-
-      // Zakaz sonlarini olish
-      if (leads.length > 0) {
+      const list = (data as Lead[]) || [];
+      setLeads(list);
+      if (list.length > 0) {
         const { data: orders } = await supabase.from("orders").select("source_id").eq("user_id", OWNER_ID).eq("source_type", "lead");
         const counts: Record<string, number> = {};
         orders?.forEach((o) => { counts[o.source_id] = (counts[o.source_id] || 0) + 1; });
         setOrderCounts(counts);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }
 
   async function loadLeadOrders(leadId: string) {
@@ -120,7 +98,7 @@ export function LeadsTable() {
   }
 
   function toggleExpand(id: string) {
-    if (expandedId === id) { setExpandedId(null); }
+    if (expandedId === id) setExpandedId(null);
     else { setExpandedId(id); loadLeadOrders(id); }
   }
 
@@ -129,26 +107,43 @@ export function LeadsTable() {
   }
 
   const avatarColors = [
-    "bg-violet-500/20 text-violet-400",
-    "bg-blue-500/20 text-blue-400",
-    "bg-emerald-500/20 text-emerald-400",
-    "bg-orange-500/20 text-orange-400",
+    "bg-violet-500/20 text-violet-400", "bg-blue-500/20 text-blue-400",
+    "bg-emerald-500/20 text-emerald-400", "bg-orange-500/20 text-orange-400",
     "bg-pink-500/20 text-pink-400",
   ];
 
+  // Sovib qolgan count
+  const coldCounts = {
+    "3": leads.filter((l) => { const d = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000); return d >= 3 && l.status !== "Buyurtma berilgan" && l.status !== "Rad etildi"; }).length,
+    "7": leads.filter((l) => { const d = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000); return d >= 7 && l.status !== "Buyurtma berilgan" && l.status !== "Rad etildi"; }).length,
+    "14": leads.filter((l) => { const d = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000); return d >= 14 && l.status !== "Buyurtma berilgan" && l.status !== "Rad etildi"; }).length,
+  };
+
   return (
     <div className="space-y-4">
-      {/* Status summary */}
-      {!loading && <StatusBar leads={leads} />}
+      {/* Sovib qolgan alert */}
+      {coldCounts["7"] > 0 && filterAge === "all" && (
+        <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-4 py-2.5 text-sm">
+          <Clock className="w-4 h-4 text-orange-400 flex-shrink-0" />
+          <span className="text-orange-300">
+            <span className="font-bold">{coldCounts["7"]} ta lid</span> 7+ kun bog'lanilmagan — sovib qolishi mumkin
+          </span>
+          <Button size="sm" variant="ghost" className="ml-auto text-xs h-7 text-orange-400 hover:bg-orange-500/10 px-2"
+            onClick={() => setFilterAge("7")}>
+            Ko'rsatish
+          </Button>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Ism yoki telefon..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-44">
             <SelectValue placeholder="Holat" />
           </SelectTrigger>
           <SelectContent>
@@ -156,8 +151,9 @@ export function LeadsTable() {
             {LEAD_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+
         <Select value={filterTag} onValueChange={setFilterTag}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-32">
             <SelectValue placeholder="Teg" />
           </SelectTrigger>
           <SelectContent>
@@ -165,6 +161,26 @@ export function LeadsTable() {
             {tags.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
+
+        {/* Sovib qolgan filter */}
+        <Select value={filterAge} onValueChange={setFilterAge}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Faollik" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Barchasi</SelectItem>
+            <SelectItem value="3">❄️ 3+ kun ({coldCounts["3"]})</SelectItem>
+            <SelectItem value="7">🥶 7+ kun ({coldCounts["7"]})</SelectItem>
+            <SelectItem value="14">💀 14+ kun ({coldCounts["14"]})</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Shablonlar tugmasi */}
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setTemplateLead(null); setTemplatesOpen(true); }}>
+          <MessageCircle className="w-4 h-4" />
+          Shablonlar
+        </Button>
+
         <Button onClick={() => setAddOpen(true)} size="sm">
           <Plus className="w-4 h-4" /> Yangi lid
         </Button>
@@ -185,186 +201,168 @@ export function LeadsTable() {
                 <th className="text-left px-4 py-3 text-muted-foreground font-medium">Mijoz</th>
                 <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden md:table-cell">Teg</th>
                 <th className="text-left px-4 py-3 text-muted-foreground font-medium">Holat</th>
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden lg:table-cell">Sana</th>
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden lg:table-cell">Yoshi</th>
                 <th className="px-4 py-3 text-right text-muted-foreground font-medium">Harakatlar</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((lead, idx) => (
-                <>
-                  <tr
-                    key={lead.id}
-                    className="border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer"
-                    onClick={() => toggleExpand(lead.id)}
-                  >
-                    {/* Avatar + Name + Phone */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0", avatarColors[idx % avatarColors.length])}>
-                          {getInitials(lead.name)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground leading-tight">{lead.name}</p>
-                          <a
-                            href={`tel:${lead.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs text-muted-foreground hover:text-primary font-mono flex items-center gap-1 mt-0.5"
-                          >
-                            <Phone className="w-3 h-3" />
-                            {lead.phone}
-                          </a>
-                        </div>
-                        {orderCounts[lead.id] > 0 && (
-                          <span className="ml-1 flex items-center gap-1 text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full px-2 py-0.5">
-                            <Package className="w-3 h-3" />
-                            {orderCounts[lead.id]}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+              {filtered.map((lead, idx) => {
+                const age = getLeadAge(lead.created_at);
+                return (
+                  <>
+                    <tr key={lead.id} className="border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer"
+                      onClick={() => toggleExpand(lead.id)}>
 
-                    {/* Tag */}
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      {lead.tag && (
-                        <span className="text-xs bg-secondary border border-border rounded-full px-2.5 py-1">
-                          {lead.tag}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      <span className={cn("text-xs px-2.5 py-1 rounded-full border font-medium", getStatusColor(lead.status))}>
-                        {lead.status}
-                      </span>
-                    </td>
-
-                    {/* Date */}
-                    <td className="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell">
-                      {formatDate(lead.created_at)}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button
-                          size="sm" variant="ghost"
-                          className="h-8 px-2 text-xs text-green-400 hover:text-green-300 hover:bg-green-500/10 gap-1"
-                          title="Zakaz berdi" onClick={() => setOrderLead(lead)}
-                        >
-                          <ShoppingCart className="w-3.5 h-3.5" />
-                          <span className="hidden xl:inline">Zakaz</span>
-                        </Button>
-                        <Button
-                          size="sm" variant="ghost"
-                          className="h-8 px-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1"
-                          title="Follow-up belgilash" onClick={() => setFollowUpLead(lead)}
-                        >
-                          <Bell className="w-3.5 h-3.5" />
-                          <span className="hidden xl:inline">Eslatma</span>
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-secondary" onClick={() => setEditLead(lead)}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Lidni o'chirish</AlertDialogTitle>
-                              <AlertDialogDescription>{lead.name} lidini o'chirmoqchimisiz?</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Bekor</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteLead(lead.id)}>O'chirish</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        <button className="p-1 text-muted-foreground ml-1">
-                          {expandedId === lead.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-
-                  {/* Expanded */}
-                  {expandedId === lead.id && (
-                    <tr key={`${lead.id}-expand`} className="bg-secondary/10 border-b border-border">
-                      <td colSpan={5} className="px-4 py-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {/* Details */}
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ma'lumotlar</p>
-                            {lead.address && (
-                              <div className="flex items-start gap-2 text-xs text-foreground">
-                                <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                {lead.address}
-                              </div>
-                            )}
-                            {lead.comment && (
-                              <div className="flex items-start gap-2 text-xs text-foreground">
-                                <MessageSquare className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                <span className="whitespace-pre-wrap">{lead.comment}</span>
-                              </div>
-                            )}
-                            {!lead.address && !lead.comment && (
-                              <p className="text-xs text-muted-foreground">Qo'shimcha ma'lumot yo'q</p>
-                            )}
+                      {/* Avatar + Info */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0", avatarColors[idx % avatarColors.length])}>
+                            {getInitials(lead.name)}
                           </div>
-
-                          {/* Quick actions */}
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Tez harakatlar</p>
-                            <div className="flex flex-col gap-2">
-                              <Button
-                                size="sm" variant="outline"
-                                className="justify-start gap-2 text-xs border-green-500/30 text-green-400 hover:bg-green-500/10"
-                                onClick={() => { setExpandedId(null); setOrderLead(lead); }}
-                              >
-                                <ShoppingCart className="w-3.5 h-3.5" /> Zakaz qo'shish
-                              </Button>
-                              <Button
-                                size="sm" variant="outline"
-                                className="justify-start gap-2 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                                onClick={() => { setExpandedId(null); setFollowUpLead(lead); }}
-                              >
-                                <Bell className="w-3.5 h-3.5" /> Eslatma belgilash
-                              </Button>
-                              <a href={`tel:${lead.phone}`}>
-                                <Button size="sm" variant="outline" className="justify-start gap-2 text-xs w-full border-violet-500/30 text-violet-400 hover:bg-violet-500/10">
-                                  <Phone className="w-3.5 h-3.5" /> Qo'ng'iroq qilish
-                                </Button>
-                              </a>
-                            </div>
-                          </div>
-
-                          {/* Order history */}
                           <div>
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Zakaz tarixi</p>
-                            {leadOrders[lead.id] === undefined ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                            ) : leadOrders[lead.id].length === 0 ? (
-                              <p className="text-xs text-muted-foreground">Zakazlar yo'q</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {leadOrders[lead.id].map((o: any) => (
-                                  <div key={o.id} className="flex items-center gap-2 bg-secondary/50 rounded-lg px-3 py-2">
-                                    <span className={cn("text-xs px-2 py-0.5 rounded-full", getProductColor(o.product))}>{o.product}</span>
-                                    <span className="text-xs font-semibold text-foreground ml-auto">{formatPrice(o.price)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                            <p className="font-semibold text-foreground leading-tight">{lead.name}</p>
+                            <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-muted-foreground hover:text-primary font-mono flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3" />{lead.phone}
+                            </a>
                           </div>
+                          {orderCounts[lead.id] > 0 && (
+                            <span className="flex items-center gap-1 text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full px-2 py-0.5">
+                              <Package className="w-3 h-3" />{orderCounts[lead.id]}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        {lead.tag && <span className="text-xs bg-secondary border border-border rounded-full px-2.5 py-1">{lead.tag}</span>}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className={cn("text-xs px-2.5 py-1 rounded-full border font-medium", getStatusColor(lead.status))}>
+                          {lead.status}
+                        </span>
+                      </td>
+
+                      {/* Lid yoshi */}
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full border font-mono font-semibold", age.color)}>
+                          {age.label}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button size="sm" variant="ghost"
+                            className="h-8 px-2 text-xs text-emerald-400 hover:bg-emerald-500/10 gap-1"
+                            onClick={() => setOrderLead(lead)}>
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            <span className="hidden xl:inline">Zakaz</span>
+                          </Button>
+                          <Button size="sm" variant="ghost"
+                            className="h-8 px-2 text-xs text-blue-400 hover:bg-blue-500/10 gap-1"
+                            onClick={() => setFollowUpLead(lead)}>
+                            <Bell className="w-3.5 h-3.5" />
+                            <span className="hidden xl:inline">Eslatma</span>
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8"
+                            onClick={() => { setTemplateLead(lead); setTemplatesOpen(true); }}>
+                            <MessageCircle className="w-3.5 h-3.5 text-violet-400" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditLead(lead)}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:bg-red-500/10">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Lidni o'chirish</AlertDialogTitle>
+                                <AlertDialogDescription>{lead.name} ni o'chirmoqchimisiz?</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Bekor</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteLead(lead.id)}>O'chirish</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                          <button className="p-1 text-muted-foreground ml-1">
+                            {expandedId === lead.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  )}
-                </>
-              ))}
+
+                    {/* Expanded */}
+                    {expandedId === lead.id && (
+                      <tr key={`${lead.id}-exp`} className="bg-secondary/10 border-b border-border">
+                        <td colSpan={5} className="px-4 py-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ma'lumotlar</p>
+                              {lead.address && (
+                                <div className="flex items-start gap-2 text-xs text-foreground">
+                                  <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />{lead.address}
+                                </div>
+                              )}
+                              {lead.comment && (
+                                <div className="flex items-start gap-2 text-xs text-foreground">
+                                  <MessageSquare className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                  <span className="whitespace-pre-wrap">{lead.comment}</span>
+                                </div>
+                              )}
+                              {!lead.address && !lead.comment && <p className="text-xs text-muted-foreground">Qo'shimcha ma'lumot yo'q</p>}
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Tez harakatlar</p>
+                              <div className="flex flex-col gap-2">
+                                <Button size="sm" variant="outline" className="justify-start gap-2 text-xs border-green-500/30 text-green-400 hover:bg-green-500/10"
+                                  onClick={() => { setExpandedId(null); setOrderLead(lead); }}>
+                                  <ShoppingCart className="w-3.5 h-3.5" /> Zakaz qo'shish
+                                </Button>
+                                <Button size="sm" variant="outline" className="justify-start gap-2 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                                  onClick={() => { setExpandedId(null); setFollowUpLead(lead); }}>
+                                  <Bell className="w-3.5 h-3.5" /> Eslatma belgilash
+                                </Button>
+                                <Button size="sm" variant="outline" className="justify-start gap-2 text-xs border-violet-500/30 text-violet-400 hover:bg-violet-500/10"
+                                  onClick={() => { setTemplateLead(lead); setTemplatesOpen(true); }}>
+                                  <MessageCircle className="w-3.5 h-3.5" /> Xabar shablonlari
+                                </Button>
+                                <a href={`tel:${lead.phone}`}>
+                                  <Button size="sm" variant="outline" className="justify-start gap-2 text-xs w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
+                                    <Phone className="w-3.5 h-3.5" /> Qo'ng'iroq qilish
+                                  </Button>
+                                </a>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Zakaz tarixi</p>
+                              {leadOrders[lead.id] === undefined ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                              ) : leadOrders[lead.id].length === 0 ? (
+                                <p className="text-xs text-muted-foreground">Zakazlar yo'q</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {leadOrders[lead.id].map((o: any) => (
+                                    <div key={o.id} className="flex items-center gap-2 bg-secondary/50 rounded-lg px-3 py-2">
+                                      <span className={cn("text-xs px-2 py-0.5 rounded-full", getProductColor(o.product))}>{o.product}</span>
+                                      <span className="text-xs font-semibold text-foreground ml-auto">{formatPrice(o.price)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -375,6 +373,7 @@ export function LeadsTable() {
       {editLead && <LeadFormModal open={!!editLead} onClose={() => setEditLead(null)} onSuccess={loadLeads} tags={tags} onAddTag={(t) => setTags((p) => p.includes(t) ? p : [...p, t])} lead={editLead} />}
       {orderLead && <OrderModal open={!!orderLead} onClose={() => setOrderLead(null)} sourceId={orderLead.id} sourceName={orderLead.name} sourceType="lead" onSuccess={loadLeads} />}
       {followUpLead && <FollowUpModal open={!!followUpLead} onClose={() => setFollowUpLead(null)} sourceId={followUpLead.id} sourceName={followUpLead.name} sourcePhone={followUpLead.phone} sourceType="lead" onSuccess={() => {}} />}
+      <MessageTemplates open={templatesOpen} onClose={() => { setTemplatesOpen(false); setTemplateLead(null); }} clientName={templateLead?.name} />
     </div>
   );
 }
@@ -394,18 +393,27 @@ function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead }: LeadF
   const [comment, setComment] = useState(lead?.comment || "");
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
+  const [duplicate, setDuplicate] = useState<{ name: string; type: string } | null>(null);
   const supabase = createClient();
+
+  // Dublikat tekshiruv
+  async function checkDuplicate(p: string) {
+    if (p.length < 9) { setDuplicate(null); return; }
+    const { data: l } = await supabase.from("leads").select("name").eq("phone", p).eq("user_id", OWNER_ID).neq("id", lead?.id || "00000000-0000-0000-0000-000000000000").limit(1);
+    if (l && l.length > 0) { setDuplicate({ name: l[0].name, type: "lid" }); return; }
+    const { data: c } = await supabase.from("clients").select("name").eq("phone", p).eq("user_id", OWNER_ID).limit(1);
+    if (c && c.length > 0) { setDuplicate({ name: c[0].name, type: "mijoz" }); return; }
+    setDuplicate(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     const payload = {
-      user_id: OWNER_ID,
-      name, phone,
+      user_id: OWNER_ID, name, phone,
       address: address || null,
       tag: tag === "none" ? null : tag || null,
-      status,
-      comment: comment || null,
+      status, comment: comment || null,
     };
     if (lead) {
       const { error } = await supabase.from("leads").update(payload).eq("id", lead.id);
@@ -414,16 +422,12 @@ function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead }: LeadF
       const { error } = await supabase.from("leads").insert(payload);
       if (error) { alert("Xato: " + error.message); setLoading(false); return; }
     }
-    setLoading(false);
-    onSuccess();
-    onClose();
+    setLoading(false); onSuccess(); onClose();
   }
 
   function handleAddTag() {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
-      onAddTag(newTag.trim());
-      setTag(newTag.trim());
-      setNewTag("");
+      onAddTag(newTag.trim()); setTag(newTag.trim()); setNewTag("");
     }
   }
 
@@ -441,7 +445,18 @@ function LeadFormModal({ open, onClose, onSuccess, tags, onAddTag, lead }: LeadF
             </div>
             <div className="space-y-1.5">
               <Label>Telefon *</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998901234567" required />
+              <Input
+                value={phone}
+                onChange={(e) => { setPhone(e.target.value); checkDuplicate(e.target.value); }}
+                placeholder="+998901234567" required
+              />
+              {/* Dublikat ogohlantirish */}
+              {duplicate && (
+                <div className="flex items-center gap-1.5 text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-md px-2 py-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  Bu raqam bazada bor: <span className="font-bold">{duplicate.name}</span> ({duplicate.type})
+                </div>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
